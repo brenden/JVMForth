@@ -5,6 +5,10 @@ import java.io.*;
 
 public class JVMForthCompiler implements Opcodes {
 
+    private static enum State {
+        NORMAL, COMMENT, WORD_HEADER, WORD_BODY
+    }
+
     //Return the contents of the source file as a string
     private static String readSource(String sourceFile) throws IOException {
 
@@ -14,7 +18,7 @@ public class JVMForthCompiler implements Opcodes {
         BufferedReader bufferedReader = new BufferedReader(unbufferedReader);
 
         //Read contents into a StringBuffer
-        StringBuffer source;
+        StringBuffer source = new StringBuffer();
         String line;
 
         for (;;) {
@@ -40,30 +44,65 @@ public class JVMForthCompiler implements Opcodes {
         return tokens;
     }
 
-    //Find the appropriate word for each token; throw an error if there is none
-    private static Word[] wordify(String[] tokens) throws WordException {
+    //Find the appropriate word for each token; handle parsing word logic for appropriate tokens
+    private static Word[] wordify(String[] tokens) throws WordException, RoutineException {
 
         Word[] words = new Word[tokens.length];
+        State state = State.NORMAL;
         int i = 0;
 
         for (String token : tokens) {
             Word asWord;
+        
+            switch (state) {
 
-            try {
-                asWord = PrimitiveFactory.makePrimitive(token);
-            }
-            catch (WordException _) {
-                try {
-                    asWord = DefinedFactory.makeDefined(token);
-                }
-                catch(WordException _) {
-                    throw new WordException("Undefined word \""+token+"\" at location "+i);
-                }
-            }
-            finally {
-                words[i++] = asWord;
+                case NORMAL:
+                    if (token.equals(":")) {
+                        state = State.WORD_HEADER;
+                    }
+                    else if (token.equals("(")) {
+                        state = State.COMMENT;
+                    }
+                    else {
+                        asWord = handleNormalWord(token);
+                        words[i++] = asWord; 
+                    }
+                break;
+
+                case COMMENT:
+                    if (token.equals(")")) {
+                        state = State.NORMAL;
+                    }
+                break;
+
+                case WORD_HEADER:
+                    state = State.WORD_BODY;
+                    RoutineWord.WordJump wordJump = RoutineWord.defineNewRoutine(token);
+                    asWord = new Colon(wordJump.getLabel(), wordJump.getExecutionToken());
+                    words[i++] = asWord; 
+                break;
+
+                case WORD_BODY:
+                    if (token.equals(";")) {
+                        state = State.NORMAL;
+                        asWord = new Semicolon();
+                        words[i++] = asWord; 
+                    }
+                    else if (token.equals("(")) {
+                        state = State.COMMENT;
+                    }
+                    else if (token.equals(":")) {
+                        throw new WordException("Illegal : in word definition");
+                    }
+                    else {
+                        asWord = handleNormalWord(token);
+                        words[i++] = asWord; 
+                    }
+                break;
             } 
         }
+
+        return words;
     }
 
     //Create byte array of compiled output
@@ -89,6 +128,22 @@ public class JVMForthCompiler implements Opcodes {
         //Return ClassWriter as a byte array
         byte[] contents = cw.toByteArray();
         return contents;
+    }
+
+    //Return a Word object for a non-parsing word token
+    private static Word handleNormalWord(String token) throws WordException {
+
+        try {
+            return PrimitiveFactory.makePrimitive(token);
+        }
+        catch (WordException _) {
+            try {
+                return new RoutineWord(token);
+            }
+            catch(WordException __) {
+                throw new WordException("Undefined word \""+token+"\"");
+            }
+        }
     }
 
     public static void main(String[] args) {

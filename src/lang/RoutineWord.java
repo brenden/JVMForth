@@ -1,4 +1,5 @@
 import org.objectweb.asm.*;
+import java.util.*;
 
 //Any non-primitive word (user-defined or library)
 public class RoutineWord extends Word {
@@ -6,7 +7,7 @@ public class RoutineWord extends Word {
     private String name;       
 
     //A helper class which associates an execution token with a Label object
-    private class WordJump {
+    public static class WordJump {
         
         private int executionToken;
         private Label label;
@@ -39,34 +40,36 @@ public class RoutineWord extends Word {
     //If the word has been defined, create a new RoutineWord object for that word
     public RoutineWord(String routineName) throws WordException {
 
-        if (rountineNames.contains(routineName)) {
+        if (routineLookup.keySet().contains(routineName)) {
             this.name = name;
         }
         else {
-            throw new WordException();
+            throw new WordException("Unknown routine: "+routineName);
         }
     }
 
-    //Define a new word. If the word was already defined, throw a WordException
-    public static Label defineNewRoutine(String routineName) throws RoutineException {
+    //Define a new word. If the word was already defined, throw a RoutineException
+    public static WordJump defineNewRoutine(String routineName) throws RoutineException {
 
         if (!routineLookup.keySet().contains(routineName)) {
 
             //Create a new WordJump; add it to routineLookup 
             int executionToken = executionTokenCounter++;
-            Label routineLabel = new Label(routineName);
+            Label routineLabel = new Label();
             WordJump wordJump = new WordJump(executionToken, routineLabel);
-            routineLabels.set(routineName, wordJump);
+            routineLookup.put(routineName, wordJump);
 
             //The new Label is passed back to the caller to be written in the word definition
-            return routineLabel;
+            return wordJump;
         }
         else {
-            throw new RoutineException();
+            throw new RoutineException("Word "+routineName+" is already defined.");
         }
     }
 
     //Write the appropriate jump to the MethodVisitor
     public MethodVisitor write(MethodVisitor mv) {
+
+        return mv;
     }    
 }
