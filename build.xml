@@ -11,8 +11,10 @@
   </target>
 
   <target name="compile" depends="init">
-          <javac srcdir="${src}" destdir="${build}"/>
-          <exclude name="**/*.fs" />
+          <javac destdir="${build}">
+                  <src path="${src}" />
+                  <exclude name="**/*.fs" />
+          </javac>
   </target>
 
   <target name="dist" depends="compile">
