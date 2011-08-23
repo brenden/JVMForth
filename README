@@ -1,0 +1,4 @@
+JVMForth is a Forth compiler for the Java Virtual Machine. It compiles ANS-compliant source code into subroutine-threaded JVM bytecode. The project is currently under development.
+
+Dependencies:
+- ASM Java bytecode manipulation library v. 3.0

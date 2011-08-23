@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+
+<project name="JVMForth" default="dist" basedir=".">
+
+  <description>Forth-to-JVM bytecode compiler</description>
+
+  <target name="init">
+    <property name="src" value="src"/>
+    <property name="build" value="build" />
+    <property name="dist" value="dist" />
+  </target>
+
+  <target name="compile" depends="init">
+          <javac srcdir="${src}" destdir="${build}"/>
+          <exclude name="**/*.fs" />
+  </target>
+
+  <target name="dist" depends="compile">
+    <mkdir dir="${dist}/lib"/>
+    <jar jarfile="${dist}/lib/JVMForth.jar" basedir="${build}"/>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build}"/>
+    <delete dir="${dist}"/>
+  </target>
+</project>
