@@ -3,11 +3,10 @@ import java.util.*;
 import java.util.regex.*;
 import java.io.*;
 
+//JVMForthCompiler parses a Forth input file and writes JVM bytecode to an output file
 public class JVMForthCompiler implements Opcodes {
 
-    private static enum State {
-        NORMAL, COMMENT, WORD_HEADER, WORD_BODY
-    }
+    private static enum State {NORMAL, COMMENT, WORD_HEADER, WORD_BODY}
 
     //Return the contents of the source file as a string
     private static String readSource(String sourceFile) throws IOException {
@@ -47,15 +46,14 @@ public class JVMForthCompiler implements Opcodes {
     //Find the appropriate word for each token; handle parsing word logic for appropriate tokens
     private static Word[] wordify(String[] tokens) throws WordException, RoutineException {
 
+        int i = 0;
         Word[] words = new Word[tokens.length];
         State state = State.NORMAL;
-        int i = 0;
 
         for (String token : tokens) {
-            Word asWord;
+            Word asWord = null;
         
             switch (state) {
-
                 case NORMAL:
                     if (token.equals(":")) {
                         state = State.WORD_HEADER;
@@ -65,7 +63,6 @@ public class JVMForthCompiler implements Opcodes {
                     }
                     else {
                         asWord = handleNormalWord(token);
-                        words[i++] = asWord; 
                     }
                 break;
 
@@ -79,14 +76,12 @@ public class JVMForthCompiler implements Opcodes {
                     state = State.WORD_BODY;
                     RoutineWord.WordJump wordJump = RoutineWord.defineNewRoutine(token);
                     asWord = new Colon(wordJump.getLabel(), wordJump.getExecutionToken());
-                    words[i++] = asWord; 
                 break;
 
                 case WORD_BODY:
                     if (token.equals(";")) {
                         state = State.NORMAL;
                         asWord = new Semicolon();
-                        words[i++] = asWord; 
                     }
                     else if (token.equals("(")) {
                         state = State.COMMENT;
@@ -96,10 +91,11 @@ public class JVMForthCompiler implements Opcodes {
                     }
                     else {
                         asWord = handleNormalWord(token);
-                        words[i++] = asWord; 
                     }
-                break;
+                break; 
             } 
+
+            if (asWord!=null) words[i++] = asWord; 
         }
 
         return words;
