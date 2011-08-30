@@ -6,7 +6,7 @@ import java.io.*;
 //JVMForthCompiler parses a Forth input file and writes JVM bytecode to an output file
 public class JVMForthCompiler implements Opcodes {
 
-    private static enum State {NORMAL, COMMENT, WORD_HEADER, WORD_BODY}
+    private static enum State {NORMAL, COMMENT, WORD_HEADER, WORD_BODY, VARIABLE, CONSTANT}
 
     //Return the contents of the source file as a string
     private static String readSource(String sourceFile) throws IOException {
@@ -21,6 +21,7 @@ public class JVMForthCompiler implements Opcodes {
         String line;
 
         for (;;) {
+
             line = bufferedReader.readLine();
             if (line==null) break;
             source.append(line);
@@ -36,7 +37,9 @@ public class JVMForthCompiler implements Opcodes {
         Pattern splitWhite = Pattern.compile("\\s+");
         String[] tokens = splitWhite.split(raw);
 
+        //Forth is case-insensitive
         for (int i=0; i<tokens.length; i++) {
+
             tokens[i] = tokens[i].toLowerCase();
         }
 
@@ -51,9 +54,12 @@ public class JVMForthCompiler implements Opcodes {
         State state = State.NORMAL;
 
         for (String token : tokens) {
+
             Word asWord = null;
         
             switch (state) {
+
+                //Not in a comment or word definition
                 case NORMAL:
                     if (token.equals(":")) {
                         state = State.WORD_HEADER;
@@ -66,18 +72,21 @@ public class JVMForthCompiler implements Opcodes {
                     }
                 break;
 
+                //Within parentheses: all tokens are ignored
                 case COMMENT:
                     if (token.equals(")")) {
                         state = State.NORMAL;
                     }
                 break;
 
+                //The last word was a colon. This word is the routine's name.
                 case WORD_HEADER:
                     state = State.WORD_BODY;
                     RoutineWord.WordJump wordJump = RoutineWord.defineNewRoutine(token);
                     asWord = new Colon(wordJump.getLabel(), wordJump.getExecutionToken());
                 break;
 
+                //The body of a word. No new words can be defined within a word
                 case WORD_BODY:
                     if (token.equals(";")) {
                         state = State.NORMAL;
@@ -101,21 +110,52 @@ public class JVMForthCompiler implements Opcodes {
         return words;
     }
 
+    //Return a Word object for a non-parsing word token
+    private static Word handleNormalWord(String token) throws WordException {
+
+        //First try parsing as a routine...
+        try {
+
+             return new RoutineWord(token);
+        }
+        catch (WordException _) {
+
+            //...then as a primitive...
+            try {
+
+                return PrimitiveFactory.makePrimitive(token); 
+            }
+            catch (WordException __) {
+
+                //...finally as a number
+                try {
+
+                    return NumberFactory.makeNumber(token);
+                }
+                catch (WordException ___) {
+
+                    throw new WordException("Undefined word \""+token+"\"");
+                }
+            }
+        }
+    }
+
     //Create byte array of compiled output
     private static byte[] byteify(Word[] words, String outputName) {
 
         //Set up class for compiled output
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        cw.visit(V1_6, ACC_PUBLIC, outputName, null, "java/lang/Object", null);
-        MethodVisitor mv = cw.visitMethod(ACC_PUBLIC+ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
-     
-        //Write each word's bytecode to the given class file
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS, outputName);
+        MethodVisitor mv = prepClass(cw);
+
+        //Write each word's bytecode to the class
         mv.visitCode();
 
         for (Word word : words) {
+
             mv = word.write(mv); 
         }
 
+        //Close out class
         mv.visitFrame(F_SAME, 0, null, 0, null);
         mv.visitInsn(RETURN);
         mv.visitMaxs(0, 0);
@@ -126,23 +166,72 @@ public class JVMForthCompiler implements Opcodes {
         return contents;
     }
 
-    //Return a Word object for a non-parsing word token
-    private static Word handleNormalWord(String token) throws WordException {
+    //Create the data stack, return stack, and memory fields
+    private static MethodVisitor prepClass(ClassWriter cw, String outputName) {
+
+        FieldVisitor fv;
+        cw.visit(V1_6, ACC_PUBLIC, outputName, null, "java/lang/Object", null);
+        MethodVisitor mv = cw.visitMethod(ACC_PUBLIC+ACC_STATIC, "main", "([Ljava/lang/String;)V", null, null);
+        String[] staticFields = {"data", "return", "memory"};
+        
+        for (String name : staticFields) {
+
+            //First create the field
+            fv = cw.visitField(ACC_PRIVATE+ACC_STATIC, name, "[I", null, null);
+            if (fv!=null) fv.visitEnd();
+
+            //Then initialize it    
+            mv.visitIntInsn(SIPUSH, 1024);
+            mv.visitIntInsn(NEWARRAY, T_FLOAT);
+            mv.visitFieldInsn(PUTSTATIC, outputName, "data", "[I");
+        }
+
+        return mv;
+    }
+
+    //Write the byte array to the specified output file
+    private static void writeBytes(byte[] bytes, String outputName) {
+
+        outputName = outputName + ".class"; 
 
         try {
-            return PrimitiveFactory.makePrimitive(token);
+
+            FileOutputStream out = new FileOutputStream(outputName);
+            out.write(bytes);
+            out.close();
         }
-        catch (WordException _) {
-            try {
-                return new RoutineWord(token);
-            }
-            catch(WordException __) {
-                throw new WordException("Undefined word \""+token+"\"");
-            }
+        catch (IOException _) {
+
+            System.err.println("Could not write to output file.");
         }
     }
 
+    //From source code to JVM bytecode
     public static void main(String[] args) {
-            
+
+        //Get the input name; determine the compiled output name
+        String inputName = args[0];
+        String outputName = inputName.split("\\.")[0];
+
+        try {
+
+            String source = readSource(inputName);
+            String[] parsed = parse(source);
+            Word[] words = wordify(parsed);
+            byte[] bytes = byteify(words, outputName);
+            writeBytes(bytes, outputName);
+        }
+        catch (WordException issue) {
+
+            System.err.println(issue.getMessage());
+        }
+        catch (RoutineException issue) {
+
+            System.err.println(issue.getMessage());
+        }
+        catch (IOException _) {
+
+            System.err.println("Could not read from source file "+inputName);
+        }
     }
 }
