@@ -3,7 +3,7 @@ public class NumberFactory {
     public static Word makeNumber(String wordName) throws WordException {
 
         try {
-            String[] parts = wordName.split(".");
+            String[] parts = wordName.split("\\.");
 
             switch (parts.length) {
 

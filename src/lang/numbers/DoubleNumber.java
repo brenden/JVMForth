@@ -15,6 +15,8 @@ public class DoubleNumber extends Word {
 
     public MethodVisitor write(MethodVisitor mv) {
 
+        mv.visitIntInsn(SIPUSH, lowValue);
+        mv.visitIntInsn(SIPUSH, highValue);
         return mv;
     } 
 }

@@ -6,12 +6,13 @@ public class SingleNumber extends Word {
     private int value; 
 
     public SingleNumber(int value) {
-        
+
         this.value = value;
     } 
 
     public MethodVisitor write(MethodVisitor mv) {
 
+        mv.visitIntInsn(SIPUSH, value);
         return mv;
     }    
 }
